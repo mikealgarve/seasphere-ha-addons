@@ -1,0 +1,26 @@
+name: "Cloudflare Access Proxy"
+version: "1.0.0"
+slug: "cf_access_proxy"
+description: "Injeta os headers do Cloudflare Access Service Token (CF-Access-Client-Id / CF-Access-Client-Secret) em pedidos HTTP e WebSocket para uma instância Home Assistant remota atrás de Cloudflare Access. Útil para ligar remote_homeassistant (ou qualquer outra integração sem suporte a headers personalizados) a uma instância remota protegida por Cloudflare Access."
+url: "https://github.com/mikealgarve/seasphere-ha-addons/tree/main/cf-access-proxy"
+arch:
+  - aarch64
+  - armv7
+  - armhf
+  - amd64
+  - i386
+startup: services
+boot: auto
+init: false
+options:
+  target_host: ""
+  cf_access_client_id: ""
+  cf_access_client_secret: ""
+schema:
+  target_host: str
+  cf_access_client_id: str
+  cf_access_client_secret: password
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: "Porta local para apontar outras integrações (ex.: remote_homeassistant) a esta instância remota, em vez do endereço público."
