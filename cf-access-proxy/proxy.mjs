@@ -39,13 +39,20 @@ const server = http.createServer((req, res) => {
     method: req.method,
     headers: buildHeaders(req.headers),
   }, (proxyRes) => {
+    proxyRes.on('error', () => res.destroy());
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
     proxyRes.pipe(res);
   });
   proxyReq.on('error', (e) => {
-    res.writeHead(502);
-    res.end('Proxy error: ' + e.message);
+    if (!res.headersSent) {
+      res.writeHead(502);
+      res.end('Proxy error: ' + e.message);
+    } else {
+      res.destroy();
+    }
   });
+  req.on('error', () => proxyReq.destroy());
+  res.on('error', () => proxyReq.destroy());
   req.pipe(proxyReq);
 });
 
@@ -66,12 +73,28 @@ server.on('upgrade', (req, clientSocket, head) => {
     clientSocket.write(headerLines);
     if (proxyHead && proxyHead.length) proxySocket.unshift(proxyHead);
     if (head && head.length) clientSocket.unshift(head);
+    proxySocket.on('error', () => clientSocket.destroy());
+    proxySocket.on('close', () => clientSocket.destroy());
+    clientSocket.on('error', () => proxySocket.destroy());
+    clientSocket.on('close', () => proxySocket.destroy());
     proxySocket.pipe(clientSocket);
     clientSocket.pipe(proxySocket);
+  });
+  // O destino recusou o upgrade (ex.: 403 do Cloudflare Access): fechar sem rebentar.
+  proxyReq.on('response', (proxyRes) => {
+    proxyRes.resume();
+    clientSocket.end(`HTTP/1.1 ${proxyRes.statusCode} ${proxyRes.statusMessage}\r\n\r\n`);
   });
   proxyReq.on('error', () => clientSocket.destroy());
   clientSocket.on('error', () => proxyReq.destroy());
   proxyReq.end();
+});
+
+server.on('clientError', (_err, socket) => socket.destroy());
+
+// Rede de segurança: um erro de rede inesperado não pode deitar o add-on abaixo.
+process.on('uncaughtException', (e) => {
+  console.error(`[cf-access-proxy] erro ignorado: ${e.code || ''} ${e.message}`);
 });
 
 // 0.0.0.0: tem de ouvir em todas as interfaces para a porta publicada
